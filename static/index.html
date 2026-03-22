@@ -118,9 +118,19 @@ tr.dn td{color:var(--txt)}
 #rout code{background:var(--sur2);border:1px solid var(--bdr);border-radius:3px;
   padding:1px 5px;font-family:var(--mono);font-size:11px}
 #rout pre{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);
-  padding:10px 12px;overflow-x:auto;margin:6px 0 10px}
-#rout pre code{background:none;border:none;padding:0;font-size:12px}
-#rout blockquote{border-left:3px solid var(--bdr);padding-left:10px;color:var(--mut);margin:4px 0 8px}
+  overflow:hidden;margin:6px 0 10px}
+#rout pre code{background:none;border:none;padding:10px 12px;display:block;font-size:12px;overflow-x:auto}
+#rout blockquote{border-left:3px solid var(--acc);padding:6px 10px;color:var(--mut);
+  margin:4px 0 8px;background:var(--blu-bg);border-radius:0 var(--r) var(--r) 0;font-size:12px}
+/* Diff code blocks — green/red line highlighting */
+#rout pre.diff-block code .dl{display:block;padding:0 12px}
+#rout pre.diff-block code .dl-add{background:var(--grn-bg);color:var(--grn)}
+#rout pre.diff-block code .dl-del{background:var(--red-bg);color:var(--red)}
+#rout pre.diff-block code .dl-neu{color:var(--txt)}
+/* File + line reference chip */
+.file-ref{display:inline-flex;align-items:center;gap:6px;background:var(--sur2);
+  border:1px solid var(--bdr);border-radius:var(--r);padding:3px 10px;
+  font-family:var(--mono);font-size:11px;color:var(--acc);margin:10px 0 4px}
 .verdict-approve{color:var(--grn);font-weight:700}
 .verdict-reject{color:var(--red);font-weight:700}
 .verdict-discuss{color:var(--amb);font-weight:700}
@@ -226,6 +236,14 @@ tr.dn td{color:var(--txt)}
       <button class="btn btn-f" id="breview" disabled>
         <span class="sp"></span><span class="lbl">Review PR</span>
       </button>
+
+      <button class="btn btn-o" id="bbuildtpl" style="margin-top:8px" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Build Template
+      </button>
     </div>
   </section>
 
@@ -313,7 +331,7 @@ const $ = id => document.getElementById(id);
 const sprov=$('sprov'), smod=$('smod'), apikey=$('apikey'), keynote=$('keynote'),
       shost=$('shost'), tok=$('tok'), repo=$('repo'), prn=$('prn'),
       idiff=$('idiff'), itit=$('itit'), idesc=$('idesc'),
-      bfetch=$('bfetch'), breview=$('breview'), bcopy=$('bcopy'),
+      bfetch=$('bfetch'), breview=$('breview'), bcopy=$('bcopy'), bbuildtpl=$('bbuildtpl'),
       err=$('err'), rout=$('rout'), rph=$('rph'), pulse=$('pulse'),
       sd=$('sd'), stxt=$('stxt'), meta=$('meta'), dscr=$('dscr'), demp=$('demp');
 
@@ -352,7 +370,7 @@ const setStatus = (t,b=false)=>{ stxt.textContent=t; sd.className=b?'busy':''; }
 const showErr   = m=>{ err.textContent=m; err.classList.add('on'); };
 const clearErr  = ()=>err.classList.remove('on');
 const setLoad   = (btn,v)=>{ btn.disabled=v; v?btn.classList.add('loading'):btn.classList.remove('loading'); };
-const updReview = ()=>{ breview.disabled=!curDiff.trim(); };
+const updReview = ()=>{ breview.disabled=!curDiff.trim(); bbuildtpl.disabled=!curDiff.trim(); };
 
 // ── Fetch PR ───────────────────────────────────────────────────────────────
 bfetch.addEventListener('click', async ()=>{
@@ -477,39 +495,57 @@ function onDone(){
 
 // ── Markdown renderer ──────────────────────────────────────────────────────
 function renderReview(md){
-  let html=md
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    // code blocks
-    .replace(/```[\w]*\n?([\s\S]*?)```/g,'<pre><code>$1</code></pre>')
-    // inline code
-    .replace(/`([^`]+)`/g,'<code>$1</code>')
-    // h2
+  const e = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // 1. Extract and replace code blocks with placeholders
+  const blocks = [];
+  let processed = md.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const idx = blocks.length;
+    if(lang === 'diff'){
+      const lines = e(code).split('\n').map(l => {
+        if(l.startsWith('+')) return `<span class="dl dl-add">${l}</span>`;
+        if(l.startsWith('-')) return `<span class="dl dl-del">${l}</span>`;
+        return `<span class="dl dl-neu">${l}</span>`;
+      }).join('');
+      blocks.push(`<pre class="diff-block"><code>${lines}</code></pre>`);
+    } else {
+      blocks.push(`<pre><code>${e(code)}</code></pre>`);
+    }
+    return `%%BLOCK${idx}%%`;
+  });
+
+  // 2. Escape remaining HTML
+  processed = e(processed);
+
+  // 3. Apply markdown
+  processed = processed
     .replace(/^## (.+)$/gm,'<h2>$1</h2>')
-    // h3
     .replace(/^### (.+)$/gm,'<h3>$1</h3>')
-    // bold
-    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
-    // italic
-    .replace(/\*([^*]+)\*/g,'<em>$1</em>')
-    // tool notifications (our custom markers)
+    // File+line reference: 📁 `file.py` · Line 42
+    .replace(/📁 `([^`]+)`( · Line \d+)?/g,'<div class="file-ref">📁 $1$2</div>')
+    .replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*([^*\n]+)\*/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    // tool markers
     .replace(/&gt; Running \*\*([^*]+)\*\*\.\.\./g,'<div class="rtool">⚙ Running $1...</div>')
     .replace(/&gt; `([^`]+)` complete\./g,'<div class="rtool" style="color:var(--grn)">✓ $1 complete</div>')
     // blockquotes
+    .replace(/^&gt;\*\*Why:\*\* (.+)$/gm,'<blockquote><strong>Why:</strong> $1</blockquote>')
     .replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>')
-    // ul
+    // lists
     .replace(/^[-*] (.+)$/gm,'<li>$1</li>')
-    .replace(/(<li>[\s\S]*?<\/li>)/g,'<ul>$1</ul>')
-    // line breaks
+    .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+    // verdict
+    .replace(/\*{0,2}APPROVE\*{0,2}/g,'<span class="verdict-approve">✅ APPROVE</span>')
+    .replace(/\*{0,2}REQUEST CHANGES\*{0,2}/g,'<span class="verdict-reject">❌ REQUEST CHANGES</span>')
+    .replace(/\*{0,2}NEEDS DISCUSSION\*{0,2}/g,'<span class="verdict-discuss">💬 NEEDS DISCUSSION</span>')
     .replace(/\n\n/g,'</p><p>')
     .replace(/\n/g,'<br/>');
 
-  // Color verdict line
-  html = html
-    .replace(/\*{0,2}APPROVE\*{0,2}/g,'<span class="verdict-approve">✅ APPROVE</span>')
-    .replace(/\*{0,2}REQUEST CHANGES\*{0,2}/g,'<span class="verdict-reject">❌ REQUEST CHANGES</span>')
-    .replace(/\*{0,2}NEEDS DISCUSSION\*{0,2}/g,'<span class="verdict-discuss">💬 NEEDS DISCUSSION</span>');
+  // 4. Restore code blocks
+  blocks.forEach((b,i) => { processed = processed.replace(`%%BLOCK${i}%%`, b); });
 
-  rout.innerHTML = `<div id="rph" style="display:none"></div><p>${html}</p>`;
+  rout.innerHTML = `<div id="rph" style="display:none"></div><p>${processed}</p>`;
   rout.scrollTop = rout.scrollHeight;
 }
 
@@ -521,6 +557,20 @@ bcopy.addEventListener('click', async ()=>{
     bcopy.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
     setTimeout(()=>bcopy.innerHTML=o,1800);
   }catch{}
+});
+
+// ── Build Template (download standalone HTML) ──────────────────────────────
+bbuildtpl.addEventListener('click', async ()=>{
+  try{
+    const r = await fetch('/api/build-template');
+    if(!r.ok){ showErr('Could not build template: HTTP '+r.status); return; }
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'pr-review.html';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }catch(e){ showErr('Build template failed: '+e.message); }
 });
 
 // Restore saved diff on load
