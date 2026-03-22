@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>PR Review Agent</title>
+<style>
+:root{
+  --bg:#0d1117;--sur:#161b22;--sur2:#21262d;--bdr:#30363d;
+  --txt:#e6edf3;--mut:#8b949e;--acc:#58a6ff;
+  --grn:#3fb950;--grn-bg:rgba(63,185,80,.15);
+  --red:#f85149;--red-bg:rgba(248,81,73,.15);
+  --blu-bg:rgba(88,166,255,.10);--amb:#d29922;--amb-bg:rgba(210,153,34,.15);
+  --r:6px;--mono:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--txt);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+  font-size:14px;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* Header */
+header{background:var(--sur);border-bottom:1px solid var(--bdr);
+  padding:0 20px;height:52px;display:flex;align-items:center;
+  justify-content:space-between;flex-shrink:0;gap:12px}
+header h1{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;white-space:nowrap}
+header h1 svg{color:var(--acc)}
+#sw{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);white-space:nowrap}
+#sd{width:8px;height:8px;border-radius:50%;background:var(--grn);transition:background .2s}
+#sd.busy{background:var(--amb);animation:blink 1s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Panels */
+main{display:flex;flex:1;overflow:hidden}
+.pnl{display:flex;flex-direction:column;border-right:1px solid var(--bdr);overflow:hidden}
+.pnl:last-child{border-right:none}
+.ph{padding:9px 14px;font-size:11px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--mut);border-bottom:1px solid var(--bdr);
+  background:var(--sur);flex-shrink:0;display:flex;align-items:center;justify-content:space-between}
+.pb{flex:1;overflow-y:auto;padding:14px}
+.pb::-webkit-scrollbar{width:6px}
+.pb::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}
+
+/* Left */
+#pL{width:268px;min-width:268px}
+.fg{margin-bottom:11px}
+label{display:block;font-size:12px;font-weight:500;color:var(--mut);margin-bottom:4px}
+input,textarea,select{width:100%;background:var(--sur2);border:1px solid var(--bdr);
+  border-radius:var(--r);color:var(--txt);font-size:13px;padding:7px 10px;
+  outline:none;font-family:inherit;transition:border-color .15s;appearance:none}
+input:focus,textarea:focus,select:focus{border-color:var(--acc)}
+textarea{resize:vertical;font-family:var(--mono);font-size:12px}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;padding-right:30px}
+hr.dv{border:none;border-top:1px solid var(--bdr);margin:12px 0}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:7px 14px;border-radius:var(--r);font-size:13px;font-weight:500;
+  cursor:pointer;border:1px solid transparent;width:100%;transition:opacity .15s,background .15s}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-o{background:var(--sur2);border-color:var(--bdr);color:var(--txt)}
+.btn-o:hover:not(:disabled){background:var(--bdr)}
+.btn-f{background:var(--acc);color:#0d1117;font-weight:600}
+.btn-f:hover:not(:disabled){opacity:.85}
+.sp{width:13px;height:13px;border:2px solid currentColor;border-top-color:transparent;
+  border-radius:50%;animation:spin .6s linear infinite;display:none}
+.btn.loading .sp{display:block}.btn.loading .lbl{display:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.eb{display:none;background:var(--red-bg);border:1px solid var(--red);
+  border-radius:var(--r);color:var(--red);padding:7px 10px;font-size:12px;
+  margin-bottom:10px;line-height:1.5;word-break:break-word}
+.eb.on{display:block}
+.note{font-size:11px;color:var(--mut);margin-top:3px}
+
+/* Diff viewer */
+#pD{flex:1}
+#meta{display:none;flex-wrap:wrap;gap:8px;padding:8px 14px;
+  border-bottom:1px solid var(--bdr);background:var(--sur);flex-shrink:0}
+#meta.on{display:flex}
+#ptit{font-weight:600;font-size:13px;width:100%}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;
+  padding:2px 8px;border-radius:20px;font-weight:500}
+.bm{background:var(--sur2);color:var(--mut);border:1px solid var(--bdr)}
+.bg2{background:var(--grn-bg);color:var(--grn)}
+.br2{background:var(--red-bg);color:var(--red)}
+#dscr{flex:1;overflow-y:auto}
+#demp{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;color:var(--mut);gap:8px;font-size:13px}
+#demp svg{opacity:.25}
+.dtbl{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;line-height:1.5}
+.dtbl td{padding:0 8px;white-space:pre}
+.dln{color:var(--mut);text-align:right;user-select:none;min-width:40px;
+  border-right:1px solid var(--bdr);padding-right:10px !important}
+.dco{width:100%}
+tr.da{background:var(--grn-bg);color:var(--grn)}
+tr.dd{background:var(--red-bg);color:var(--red)}
+tr.dh{background:var(--blu-bg);color:var(--acc);font-size:11px}
+tr.df{background:var(--sur2);color:var(--mut);font-weight:700}
+tr.dn td{color:var(--txt)}
+
+/* Review panel */
+#pR{width:420px;min-width:420px}
+#rout{flex:1;overflow-y:auto;padding:14px;font-size:13px;line-height:1.7}
+#rout::-webkit-scrollbar{width:6px}
+#rout::-webkit-scrollbar-thumb{background:var(--bdr);border-radius:3px}
+#rph{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;color:var(--mut);gap:8px;font-size:13px}
+#rph svg{opacity:.25}
+.rtool{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);
+  padding:4px 10px;font-size:11px;color:var(--mut);font-family:var(--mono);
+  margin:4px 0;display:inline-block}
+/* Markdown rendering */
+#rout h2{font-size:15px;font-weight:600;margin:16px 0 6px;padding-bottom:4px;
+  border-bottom:1px solid var(--bdr);color:var(--txt)}
+#rout h3{font-size:13px;font-weight:600;margin:12px 0 4px;color:var(--acc)}
+#rout p{margin:4px 0 8px}
+#rout ul,#rout ol{padding-left:18px;margin:4px 0 8px}
+#rout li{margin:2px 0}
+#rout code{background:var(--sur2);border:1px solid var(--bdr);border-radius:3px;
+  padding:1px 5px;font-family:var(--mono);font-size:11px}
+#rout pre{background:var(--sur2);border:1px solid var(--bdr);border-radius:var(--r);
+  padding:10px 12px;overflow-x:auto;margin:6px 0 10px}
+#rout pre code{background:none;border:none;padding:0;font-size:12px}
+#rout blockquote{border-left:3px solid var(--bdr);padding-left:10px;color:var(--mut);margin:4px 0 8px}
+.verdict-approve{color:var(--grn);font-weight:700}
+.verdict-reject{color:var(--red);font-weight:700}
+.verdict-discuss{color:var(--amb);font-weight:700}
+.ib{background:none;border:1px solid var(--bdr);border-radius:var(--r);
+  color:var(--mut);cursor:pointer;padding:4px 10px;font-size:11px;
+  display:inline-flex;align-items:center;gap:4px;transition:color .15s,border-color .15s}
+.ib:hover{color:var(--txt);border-color:var(--mut)}
+.ib:disabled{opacity:.35;cursor:not-allowed}
+#pulse{display:none;align-items:center;gap:6px;font-size:12px;color:var(--amb)}
+#pulse.on{display:flex}
+#pdot{width:7px;height:7px;border-radius:50%;background:var(--amb);animation:blink 1s ease-in-out infinite}
+
+@media(max-width:960px){
+  body{overflow:auto}main{flex-direction:column;overflow:visible}
+  .pnl{width:100% !important;min-width:0 !important;border-right:none;border-bottom:1px solid var(--bdr)}
+  #pD,#pR{min-height:400px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/>
+      <path d="M6 9v1a3 3 0 0 0 3 3h6a3 3 0 0 1 3 3v1"/>
+    </svg>
+    PR Review Agent
+  </h1>
+  <div id="sw"><div id="sd"></div><span id="stxt">Ready</span></div>
+</header>
+
+<main>
+
+  <!-- LEFT: Config -->
+  <section class="pnl" id="pL">
+    <div class="ph">Config</div>
+    <div class="pb">
+      <div id="err" class="eb"></div>
+
+      <!-- LLM Provider -->
+      <div class="fg">
+        <label>LLM Provider</label>
+        <select id="sprov">
+          <option value="groq">Groq (Free — Llama 3)</option>
+          <option value="openai">OpenAI (ChatGPT)</option>
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="gemini">Google Gemini</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Model</label>
+        <select id="smod"></select>
+      </div>
+      <div class="fg">
+        <label>API Key</label>
+        <input id="apikey" type="password" placeholder="Paste your API key..." autocomplete="off"/>
+        <div class="note" id="keynote"></div>
+        <div class="note" id="envnote" style="display:none;color:var(--grn)">✓ Key loaded from server .env — field can be left blank</div>
+      </div>
+
+      <hr class="dv"/>
+
+      <!-- Git host -->
+      <div class="fg">
+        <label>Git Host</label>
+        <select id="shost">
+          <option value="github">GitHub</option>
+          <option value="bitbucket">Bitbucket</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Token <span style="font-weight:400;font-size:11px">— optional (private repos)</span></label>
+        <input id="tok" type="password" placeholder="ghp_... or bb_..." autocomplete="off"/>
+      </div>
+      <div class="fg">
+        <label>Repository</label>
+        <input id="repo" type="text" placeholder="owner/repo"/>
+      </div>
+      <div class="fg">
+        <label>PR Number</label>
+        <input id="prn" type="number" placeholder="42" min="1"/>
+      </div>
+      <button class="btn btn-o" id="bfetch">
+        <span class="sp"></span><span class="lbl">Fetch PR</span>
+      </button>
+
+      <hr class="dv"/>
+
+      <div class="fg">
+        <label>— or paste diff manually —</label>
+        <textarea id="idiff" rows="5" placeholder="Paste unified diff here..."></textarea>
+      </div>
+      <div class="fg">
+        <label>PR Title <span style="font-weight:400">(optional)</span></label>
+        <input id="itit" type="text" placeholder="Fix: null pointer on login"/>
+      </div>
+      <div class="fg">
+        <label>PR Description <span style="font-weight:400">(optional)</span></label>
+        <textarea id="idesc" rows="2" placeholder="What does this PR do?"></textarea>
+      </div>
+
+      <button class="btn btn-f" id="breview" disabled>
+        <span class="sp"></span><span class="lbl">Review PR</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- CENTER: Diff viewer -->
+  <section class="pnl" id="pD">
+    <div class="ph">Diff Viewer</div>
+    <div id="meta">
+      <span id="ptit"></span>
+      <span id="ba" class="badge bm"></span>
+      <span id="bb" class="badge bm"></span>
+      <span id="bf" class="badge bm"></span>
+      <span id="bplus" class="badge bg2"></span>
+      <span id="bminus" class="badge br2"></span>
+    </div>
+    <div id="dscr">
+      <div id="demp">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+          <line x1="16" y1="13" x2="8" y2="13"/>
+          <line x1="16" y1="17" x2="8" y2="17"/>
+        </svg>
+        <p>Fetch a PR or paste a diff</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: AI Review -->
+  <section class="pnl" id="pR">
+    <div class="ph">
+      AI Review
+      <div style="display:flex;gap:6px;align-items:center">
+        <div id="pulse"><div id="pdot"></div><span>Reviewing…</span></div>
+        <button class="ib" id="bcopy" disabled>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          Copy
+        </button>
+      </div>
+    </div>
+    <div id="rout">
+      <div id="rph">
+        <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        <p>Your AI review will appear here</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ── Provider / model config ────────────────────────────────────────────────
+const MODELS = {
+  groq: [
+    {id:"llama-3.3-70b-versatile", label:"Llama 3.3 70B (free)"},
+    {id:"llama-3.1-8b-instant",    label:"Llama 3.1 8B Instant (free, fast)"},
+    {id:"mixtral-8x7b-32768",      label:"Mixtral 8x7B (free)"},
+  ],
+  openai: [
+    {id:"gpt-4o",      label:"GPT-4o"},
+    {id:"gpt-4o-mini", label:"GPT-4o Mini (cheaper)"},
+  ],
+  anthropic: [
+    {id:"claude-sonnet-4-5-20251001", label:"Claude Sonnet 4.5"},
+    {id:"claude-haiku-4-5-20251001",  label:"Claude Haiku 4.5 (faster)"},
+  ],
+  gemini: [
+    {id:"gemini-1.5-flash", label:"Gemini 1.5 Flash (free tier)"},
+    {id:"gemini-1.5-pro",   label:"Gemini 1.5 Pro"},
+  ],
+};
+const KEY_NOTES = {
+  groq:     "Get a free key at console.groq.com",
+  openai:   "platform.openai.com/api-keys",
+  anthropic:"console.anthropic.com",
+  gemini:   "aistudio.google.com/app/apikey",
+};
+
+// ── Refs ───────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const sprov=$('sprov'), smod=$('smod'), apikey=$('apikey'), keynote=$('keynote'),
+      shost=$('shost'), tok=$('tok'), repo=$('repo'), prn=$('prn'),
+      idiff=$('idiff'), itit=$('itit'), idesc=$('idesc'),
+      bfetch=$('bfetch'), breview=$('breview'), bcopy=$('bcopy'),
+      err=$('err'), rout=$('rout'), rph=$('rph'), pulse=$('pulse'),
+      sd=$('sd'), stxt=$('stxt'), meta=$('meta'), dscr=$('dscr'), demp=$('demp');
+
+let curDiff='', rawReview='', es=null;
+
+// ── Provider dropdowns ─────────────────────────────────────────────────────
+function populateModels(){
+  const p=sprov.value;
+  smod.innerHTML=MODELS[p].map(m=>`<option value="${m.id}">${m.label}</option>`).join('');
+  keynote.textContent=KEY_NOTES[p]||'';
+}
+async function checkEnvKey(provider) {
+  try {
+    const r = await fetch(`/api/env-key?provider=${provider}`);
+    const d = await r.json();
+    $('envnote').style.display = d.has_key ? '' : 'none';
+  } catch {}
+}
+sprov.addEventListener('change', () => { populateModels(); checkEnvKey(sprov.value); });
+populateModels();
+checkEnvKey(sprov.value);
+
+// ── Persist non-secret fields ──────────────────────────────────────────────
+['sprov','smod','shost','repo','prn','itit','idesc','idiff'].forEach(id=>{
+  const el=$(id), v=localStorage.getItem('pra2_'+id);
+  if(v) el.value=v;
+  el.addEventListener('change', ()=>localStorage.setItem('pra2_'+id, el.value));
+  el.addEventListener('input',  ()=>localStorage.setItem('pra2_'+id, el.value));
+});
+// Re-apply saved provider to repopulate models correctly
+if(localStorage.getItem('pra2_sprov')) populateModels();
+if(localStorage.getItem('pra2_smod'))  smod.value=localStorage.getItem('pra2_smod');
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const setStatus = (t,b=false)=>{ stxt.textContent=t; sd.className=b?'busy':''; };
+const showErr   = m=>{ err.textContent=m; err.classList.add('on'); };
+const clearErr  = ()=>err.classList.remove('on');
+const setLoad   = (btn,v)=>{ btn.disabled=v; v?btn.classList.add('loading'):btn.classList.remove('loading'); };
+const updReview = ()=>{ breview.disabled=!curDiff.trim(); };
+
+// ── Fetch PR ───────────────────────────────────────────────────────────────
+bfetch.addEventListener('click', async ()=>{
+  clearErr();
+  const r=repo.value.trim(), n=parseInt(prn.value);
+  if(!r){ showErr('Repository is required.'); return; }
+  if(!n||n<1){ showErr('Enter a valid PR number.'); return; }
+  setLoad(bfetch,true); setStatus('Fetching PR…',true);
+  try{
+    const res=await fetch('/api/fetch-pr',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({host:shost.value, token:tok.value.trim(), repo:r, pr_number:n}),
+    });
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.detail||'Fetch failed');
+    $('ptit').textContent=data.title;
+    $('ba').textContent='@'+data.author;
+    $('bb').textContent=data.base_branch+' ← '+data.head_branch;
+    $('bf').textContent=data.changed_files+' file'+(data.changed_files!==1?'s':'');
+    $('bplus').textContent='+'+data.additions;
+    $('bminus').textContent='-'+data.deletions;
+    meta.classList.add('on');
+    itit.value=data.title; localStorage.setItem('pra2_itit',data.title);
+    idesc.value=data.body; localStorage.setItem('pra2_idesc',data.body);
+    curDiff=data.diff; idiff.value=data.diff;
+    renderDiff(data.diff); updReview(); setStatus('PR loaded',false);
+  }catch(e){ showErr(e.message); setStatus('Ready',false); }
+  finally{ setLoad(bfetch,false); }
+});
+
+idiff.addEventListener('input',()=>{ curDiff=idiff.value; renderDiff(curDiff); updReview(); });
+
+// ── Diff renderer ──────────────────────────────────────────────────────────
+function renderDiff(text){
+  const old=dscr.querySelector('.dtbl'); if(old) old.remove();
+  if(!text.trim()){ demp.style.display=''; return; }
+  demp.style.display='none';
+  const tbl=document.createElement('table'); tbl.className='dtbl';
+  let nl=0;
+  text.split('\n').forEach(line=>{
+    const tr=document.createElement('tr');
+    const tn=document.createElement('td'); tn.className='dln';
+    const tc=document.createElement('td'); tc.className='dco';
+    if(/^(diff --git|index |--- |\+\+\+ |new file|deleted file)/.test(line)){
+      tr.className='df'; tn.textContent='';
+    }else if(line.startsWith('@@')){
+      tr.className='dh'; tn.textContent='…';
+      const mm=line.match(/@@ -\d+(?:,\d+)? \+(\d+)/);
+      if(mm) nl=parseInt(mm[1])-1;
+    }else if(line.startsWith('+')){
+      tr.className='da'; tn.textContent=++nl;
+    }else if(line.startsWith('-')){
+      tr.className='dd'; tn.textContent='';
+    }else{
+      tr.className='dn'; tn.textContent=++nl;
+    }
+    tc.textContent=line;
+    tr.appendChild(tn); tr.appendChild(tc); tbl.appendChild(tr);
+  });
+  dscr.appendChild(tbl);
+}
+
+// ── Review via SSE ─────────────────────────────────────────────────────────
+breview.addEventListener('click', async ()=>{
+  clearErr();
+  if(es){ es.close(); es=null; }
+  rawReview='';
+  rph.style.display='none';
+  rout.innerHTML='<div id="rph" style="display:none"></div>';
+  pulse.classList.add('on');
+  setLoad(breview,true); setStatus('Reviewing…',true);
+  bcopy.disabled=true;
+
+  // POST to kick off the review — get back SSE
+  const body=JSON.stringify({
+    llm_provider: sprov.value,
+    api_key: apikey.value.trim(),
+    model: smod.value,
+    diff: curDiff,
+    pr_title: itit.value.trim(),
+    pr_description: idesc.value.trim(),
+  });
+
+  try{
+    const resp=await fetch('/api/review',{
+      method:'POST', headers:{'Content-Type':'application/json'}, body,
+    });
+    if(!resp.ok){
+      const d=await resp.json();
+      throw new Error(d.detail||'Review failed');
+    }
+    const reader=resp.body.getReader();
+    const dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const {done,value}=await reader.read();
+      if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n');
+      buf=lines.pop();
+      for(const line of lines){
+        if(!line.startsWith('data: ')) continue;
+        const raw=line.slice(6);
+        if(raw==='[DONE]'){ onDone(); break; }
+        try{
+          const parsed=JSON.parse(raw);
+          if(parsed && parsed.error){ showErr(parsed.error); onDone(); break; }
+          if(typeof parsed==='string'){ rawReview+=parsed; renderReview(rawReview); }
+        }catch{}
+      }
+    }
+  }catch(e){ showErr(e.message); }
+  finally{ onDone(); }
+});
+
+function onDone(){
+  pulse.classList.remove('on');
+  setLoad(breview,false);
+  setStatus('Review complete',false);
+  if(rawReview) bcopy.disabled=false;
+}
+
+// ── Markdown renderer ──────────────────────────────────────────────────────
+function renderReview(md){
+  let html=md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    // code blocks
+    .replace(/```[\w]*\n?([\s\S]*?)```/g,'<pre><code>$1</code></pre>')
+    // inline code
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    // h2
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    // h3
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    // bold
+    .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+    // italic
+    .replace(/\*([^*]+)\*/g,'<em>$1</em>')
+    // tool notifications (our custom markers)
+    .replace(/&gt; Running \*\*([^*]+)\*\*\.\.\./g,'<div class="rtool">⚙ Running $1...</div>')
+    .replace(/&gt; `([^`]+)` complete\./g,'<div class="rtool" style="color:var(--grn)">✓ $1 complete</div>')
+    // blockquotes
+    .replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>')
+    // ul
+    .replace(/^[-*] (.+)$/gm,'<li>$1</li>')
+    .replace(/(<li>[\s\S]*?<\/li>)/g,'<ul>$1</ul>')
+    // line breaks
+    .replace(/\n\n/g,'</p><p>')
+    .replace(/\n/g,'<br/>');
+
+  // Color verdict line
+  html = html
+    .replace(/\*{0,2}APPROVE\*{0,2}/g,'<span class="verdict-approve">✅ APPROVE</span>')
+    .replace(/\*{0,2}REQUEST CHANGES\*{0,2}/g,'<span class="verdict-reject">❌ REQUEST CHANGES</span>')
+    .replace(/\*{0,2}NEEDS DISCUSSION\*{0,2}/g,'<span class="verdict-discuss">💬 NEEDS DISCUSSION</span>');
+
+  rout.innerHTML = `<div id="rph" style="display:none"></div><p>${html}</p>`;
+  rout.scrollTop = rout.scrollHeight;
+}
+
+// ── Copy ───────────────────────────────────────────────────────────────────
+bcopy.addEventListener('click', async ()=>{
+  try{
+    await navigator.clipboard.writeText(rawReview);
+    const o=bcopy.innerHTML;
+    bcopy.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
+    setTimeout(()=>bcopy.innerHTML=o,1800);
+  }catch{}
+});
+
+// Restore saved diff on load
+if(idiff.value.trim()){ curDiff=idiff.value; renderDiff(curDiff); updReview(); }
+</script>
+</body>
+</html>
