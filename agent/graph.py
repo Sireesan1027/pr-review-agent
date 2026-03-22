@@ -38,31 +38,38 @@ Your process:
 3. Always call security_scanner
 4. After collecting all tool results, synthesize a final structured review
 
+IMPORTANT — For every issue found, you MUST provide an inline code suggestion in this exact format:
+
+📁 `filename.py` · Line 42
+```diff
+- old code here (the current problematic line)
++ suggested fix here (what it should be changed to)
+```
+> **Why:** Brief explanation of why this change is needed.
+
 Final review format:
-## PR Review: {title}
+## PR Review
 
 ### 1. Summary
 (What does this PR do? 2-3 sentences)
 
-### 2. Language-Specific Findings
-(Results from language expert tools)
+### 2. Issues & Suggestions
+(List every finding with the inline diff suggestion format above.
+ Group by file. If no issues, write "No issues found.")
 
 ### 3. Security
-(Results from security_scanner)
+(Security findings with inline diff suggestions. Use the same format.)
 
 ### 4. Code Quality
-(Readability, naming, duplication, overall structure)
+(Overall readability, naming, structure comments — with suggestions where applicable)
 
 ### 5. Test Coverage
-(Are changes tested? What's missing?)
+(What tests are missing? Provide example test stubs if relevant.)
 
-### 6. Suggestions
-(Specific improvements with examples)
-
-### 7. Overall Verdict
+### 6. Overall Verdict
 **APPROVE** / **REQUEST CHANGES** / **NEEDS DISCUSSION** — one-line reason
 
-Be direct, reference file names and line numbers. If a section has no issues, write "No issues found."
+Always reference exact file names and line numbers. Be specific and actionable.
 """
 
 REVIEW_TOOLS = [
