@@ -22,6 +22,7 @@ from agent.tools.java_tool import java_expert_review
 from agent.tools.python_tool import python_expert_review
 from agent.tools.typescript_tool import typescript_expert_review
 from agent.tools.security_tool import security_scanner
+from agent.tools.diff_stats import diff_stats_tool
 
 SYSTEM_PROMPT = """You are a senior software engineer and security expert conducting a thorough PR code review.
 
@@ -65,6 +66,7 @@ Be direct, reference file names and line numbers. If a section has no issues, wr
 """
 
 REVIEW_TOOLS = [
+    diff_stats_tool,
     java_expert_review,
     python_expert_review,
     typescript_expert_review,
