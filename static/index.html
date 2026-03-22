@@ -236,6 +236,14 @@ tr.dn td{color:var(--txt)}
       <button class="btn btn-f" id="breview" disabled>
         <span class="sp"></span><span class="lbl">Review PR</span>
       </button>
+
+      <button class="btn btn-o" id="bbuildtpl" style="margin-top:8px" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        Build Template
+      </button>
     </div>
   </section>
 
@@ -323,7 +331,7 @@ const $ = id => document.getElementById(id);
 const sprov=$('sprov'), smod=$('smod'), apikey=$('apikey'), keynote=$('keynote'),
       shost=$('shost'), tok=$('tok'), repo=$('repo'), prn=$('prn'),
       idiff=$('idiff'), itit=$('itit'), idesc=$('idesc'),
-      bfetch=$('bfetch'), breview=$('breview'), bcopy=$('bcopy'),
+      bfetch=$('bfetch'), breview=$('breview'), bcopy=$('bcopy'), bbuildtpl=$('bbuildtpl'),
       err=$('err'), rout=$('rout'), rph=$('rph'), pulse=$('pulse'),
       sd=$('sd'), stxt=$('stxt'), meta=$('meta'), dscr=$('dscr'), demp=$('demp');
 
@@ -362,7 +370,7 @@ const setStatus = (t,b=false)=>{ stxt.textContent=t; sd.className=b?'busy':''; }
 const showErr   = m=>{ err.textContent=m; err.classList.add('on'); };
 const clearErr  = ()=>err.classList.remove('on');
 const setLoad   = (btn,v)=>{ btn.disabled=v; v?btn.classList.add('loading'):btn.classList.remove('loading'); };
-const updReview = ()=>{ breview.disabled=!curDiff.trim(); };
+const updReview = ()=>{ breview.disabled=!curDiff.trim(); bbuildtpl.disabled=!curDiff.trim(); };
 
 // ── Fetch PR ───────────────────────────────────────────────────────────────
 bfetch.addEventListener('click', async ()=>{
@@ -549,6 +557,20 @@ bcopy.addEventListener('click', async ()=>{
     bcopy.innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!';
     setTimeout(()=>bcopy.innerHTML=o,1800);
   }catch{}
+});
+
+// ── Build Template (download standalone HTML) ──────────────────────────────
+bbuildtpl.addEventListener('click', async ()=>{
+  try{
+    const r = await fetch('/api/build-template');
+    if(!r.ok){ showErr('Could not build template: HTTP '+r.status); return; }
+    const blob = await r.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'pr-review.html';
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(url);
+  }catch(e){ showErr('Build template failed: '+e.message); }
 });
 
 // Restore saved diff on load
